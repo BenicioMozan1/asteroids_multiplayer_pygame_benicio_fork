@@ -84,7 +84,8 @@ class World:
     def spawn_ufo(self) -> None:
         small = uniform(0, 1) < 0.5
         pos = rand_edge_pos()
-        ufo = UFO(pos, small)
+        target = self._get_primary_target()
+        ufo = UFO(pos, small, target_pos=target)
         self.ufos.add(ufo)
 
         self.all_sprites.add(ufo)

@@ -170,7 +170,12 @@ class Ship(pg.sprite.Sprite):
 class UFO(pg.sprite.Sprite):
     """UFO com dois comportamentos e tiro."""
 
-    def __init__(self, pos: Vec, small: bool) -> None:
+    def __init__(
+        self,
+        pos: Vec,
+        small: bool,
+        target_pos: Vec | None = None,
+    ) -> None:
         super().__init__()
         self.small = small
         cfg = C.UFO_SMALL if small else C.UFO_BIG
@@ -180,11 +185,35 @@ class UFO(pg.sprite.Sprite):
         self.vel = Vec(0, 0)
         self.speed = float(C.UFO_SPEED_SMALL if small else C.UFO_SPEED_BIG)
         self.cool = 0.0
+        self.move_dir: Vec | None = None
 
         self.target_pos: Vec | None = None
 
+        if self.small:
+            self._lock_small_move_dir(target_pos)
+
         self._setup_crossing_if_needed()
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+
+    def _lock_small_move_dir(self, target_pos: Vec | None) -> None:
+        if target_pos is None:
+            ang = uniform(0.0, 360.0)
+            self.move_dir = Vec(
+                math.cos(math.radians(ang)),
+                math.sin(math.radians(ang)),
+            )
+            return
+
+        to_target = Vec(target_pos) - self.pos
+        if to_target.length_squared() < 1e-6:
+            ang = uniform(0.0, 360.0)
+            self.move_dir = Vec(
+                math.cos(math.radians(ang)),
+                math.sin(math.radians(ang)),
+            )
+            return
+
+        self.move_dir = to_target.normalize()
 
     def _setup_crossing_if_needed(self) -> None:
         if self.small:
@@ -233,11 +262,8 @@ class UFO(pg.sprite.Sprite):
         self.rect.center = (int(self.pos.x), int(self.pos.y))
 
     def _update_pursue(self, dt: float) -> None:
-        if self.target_pos is not None:
-            to_target = self.target_pos - self.pos
-            if to_target.length_squared() > 1e-6:
-                desired = to_target.normalize() * self.speed
-                self.vel = self.vel.lerp(desired, 0.08)
+        if self.move_dir is not None:
+            self.vel = self.move_dir * self.speed
 
         self.pos += self.vel * dt
         self.pos = wrap_pos(self.pos)
