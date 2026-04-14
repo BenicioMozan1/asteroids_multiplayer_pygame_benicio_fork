@@ -1,13 +1,14 @@
-"""Renderização do cliente (pygame)."""
+"""Client-side rendering (pygame)."""
 
 import pygame as pg
 
 from core import config as C
 from core.entities import Asteroid, Bullet, Ship, UFO
+from core.scene import SceneState
 
 
 class Renderer:
-    """Desenha cenas e entidades sem acoplar regras no Game."""
+    """Draws scenes and entities without coupling game rules to Game."""
 
     def __init__(
         self,
@@ -21,29 +22,31 @@ class Renderer:
         self.font = safe_fonts["font"]
         self.big = safe_fonts["big"]
 
+        self._draw_dispatch: dict[type, callable] = {
+            Bullet: self._draw_bullet,
+            Asteroid: self._draw_asteroid,
+            Ship: self._draw_ship,
+            UFO: self._draw_ufo,
+        }
+
     def clear(self) -> None:
         self.screen.fill(self.config.BLACK)
 
     def draw_world(self, world: object) -> None:
         sprites = getattr(world, "all_sprites", [])
         for sprite in sprites:
-            if isinstance(sprite, Bullet):
-                self._draw_bullet(sprite)
-            elif isinstance(sprite, Asteroid):
-                self._draw_asteroid(sprite)
-            elif isinstance(sprite, Ship):
-                self._draw_ship(sprite)
-            elif isinstance(sprite, UFO):
-                self._draw_ufo(sprite)
+            drawer = self._draw_dispatch.get(type(sprite))
+            if drawer is not None:
+                drawer(sprite)
 
     def draw_hud(
         self,
         score: int,
         lives: int,
         wave: int,
-        state: str,
+        state: SceneState,
     ) -> None:
-        if state != "play":
+        if state != SceneState.PLAY:
             return
 
         text = f"SCORE {score:06d}   LIVES {lives}   WAVE {wave}"
@@ -59,7 +62,7 @@ class Renderer:
         )
         self._draw_text(
             self.font,
-            "Pressione qualquer tecla",
+            "Press any key",
             self.config.WIDTH // 2 - 170,
             350,
         )
@@ -73,7 +76,7 @@ class Renderer:
         )
         self._draw_text(
             self.font,
-            "Pressione qualquer tecla",
+            "Press any key",
             self.config.WIDTH // 2 - 170,
             340,
         )

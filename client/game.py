@@ -1,9 +1,8 @@
-"""Game loop e cenas (menu, jogo, game over).
+"""Game loop and scenes (menu, play, game over).
 
-Didático:
-- InputMapper converte teclado -> PlayerCommand.
-- World atualiza simulação e gera eventos (strings) para o Game.
-- Game decide áudio e telas (baixo acoplamento).
+- InputMapper converts keyboard input into PlayerCommand.
+- World updates the simulation and generates events (strings) for Game.
+- Game handles audio and screen transitions (low coupling).
 """
 
 import sys
@@ -11,24 +10,19 @@ import sys
 import pygame as pg
 
 from core import config as C
+from core.scene import SceneState
 from client.audio import load_sounds
+from client.audio_manager import AudioManager
 from client.controls import InputMapper
 from client.renderer import Renderer
 from core.world import World
 
 
-class Scene:
-    """Representa uma tela do jogo."""
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-
 class Game:
-    """Orquestra input -> update -> draw."""
+    """Orchestrates input -> update -> draw."""
 
     def __init__(self) -> None:
-        pg.mixer.pre_init(44100, -16, 2, 512)
+        pg.mixer.pre_init(C.AUDIO_FREQUENCY, C.AUDIO_SIZE, C.AUDIO_CHANNELS, C.AUDIO_BUFFER)
         pg.init()
         pg.mixer.init()
 
@@ -38,25 +32,20 @@ class Game:
         self.clock = pg.time.Clock()
         self.running = True
 
-        self.font = pg.font.SysFont("consolas", 22)
-        self.big = pg.font.SysFont("consolas", 64)
+        self.font = pg.font.SysFont(C.FONT_NAME, C.FONT_SIZE_SMALL)
+        self.big = pg.font.SysFont(C.FONT_NAME, C.FONT_SIZE_LARGE)
         self.renderer = Renderer(
             self.screen,
             config=C,
             fonts={"font": self.font, "big": self.big},
         )
 
-        self.scene = Scene("menu")
+        self.scene = SceneState.MENU
         self.world = World()
         self.input_mapper = InputMapper()
 
         self.sounds = load_sounds(C.SOUND_PATH)
-
-        self._thrust_ch = pg.mixer.Channel(1)
-        self._sfx_ch = pg.mixer.Channel(2)
-        self._ufo_ch = pg.mixer.Channel(3)
-
-        self._ufo_siren_kind: str | None = None
+        self.audio = AudioManager(self.sounds)
 
     def run(self) -> None:
         while self.running:
@@ -75,22 +64,22 @@ class Game:
             if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
                 self._quit()
 
-            if self.scene.name == "menu":
+            if self.scene == SceneState.MENU:
                 if event.type == pg.KEYDOWN:
-                    self.scene = Scene("play")
+                    self.scene = SceneState.PLAY
                 continue
 
-            if self.scene.name == "game_over":
+            if self.scene == SceneState.GAME_OVER:
                 if event.type == pg.KEYDOWN:
                     self.world.reset()
-                    self.scene = Scene("play")
+                    self.scene = SceneState.PLAY
                 continue
 
-            if self.scene.name == "play":
+            if self.scene == SceneState.PLAY:
                 self.input_mapper.handle_event(event)
 
     def _update(self, dt: float) -> None:
-        if self.scene.name != "play":
+        if self.scene != SceneState.PLAY:
             return
 
         keys = pg.key.get_pressed()
@@ -100,92 +89,35 @@ class Game:
         self.world.update(dt, commands)
 
         if self.world.game_over:
-            self._stop_loops()
-            self.scene = Scene("game_over")
+            self.audio.stop_all()
+            self.scene = SceneState.GAME_OVER
             return
 
-        self._update_thrust(cmd.thrust)
-        self._update_ufo_siren()
-        self._play_events(self.world.events)
+        self.audio.update_thrust(cmd.thrust)
+        self.audio.update_ufo_siren(list(self.world.ufos))
+        self.audio.play_events(self.world.events)
 
     def _draw(self) -> None:
         self.renderer.clear()
 
-        if self.scene.name == "menu":
+        if self.scene == SceneState.MENU:
             self.renderer.draw_menu()
             pg.display.flip()
             return
 
-        if self.scene.name == "game_over":
+        if self.scene == SceneState.GAME_OVER:
             self.renderer.draw_game_over()
             pg.display.flip()
             return
 
         self.renderer.draw_world(self.world)
         self.renderer.draw_hud(
-            self.world.score,
-            self.world.lives,
+            self.world.scores.get(C.LOCAL_PLAYER_ID, 0),
+            self.world.lives.get(C.LOCAL_PLAYER_ID, 0),
             self.world.wave,
-            self.scene.name,
+            self.scene,
         )
         pg.display.flip()
-
-    def _play_events(self, events: list[str]) -> None:
-        for ev in events:
-            if ev == "player_shoot":
-                self._sfx_ch.play(self.sounds.player_shoot)
-            elif ev == "ufo_shoot":
-                self._sfx_ch.play(self.sounds.ufo_shoot)
-            elif ev == "asteroid_explosion":
-                self._sfx_ch.play(self.sounds.asteroid_explosion)
-            elif ev == "ship_explosion":
-                self._sfx_ch.play(self.sounds.ship_explosion)
-
-    def _update_thrust(self, thrust: bool) -> None:
-        if thrust:
-            if not self._thrust_ch.get_busy():
-                self._thrust_ch.play(self.sounds.thrust_loop, loops=-1)
-        else:
-            if self._thrust_ch.get_busy():
-                self._thrust_ch.stop()
-
-    def _update_ufo_siren(self) -> None:
-        kind = self._choose_ufo_siren()
-        if kind is None:
-            if self._ufo_ch.get_busy():
-                self._ufo_ch.stop()
-            self._ufo_siren_kind = None
-            return
-
-        if self._ufo_siren_kind == kind:
-            return
-
-        self._ufo_ch.stop()
-        if kind == "small":
-            snd = self.sounds.ufo_siren_small
-        else:
-            snd = self.sounds.ufo_siren_big
-
-        self._ufo_ch.play(snd, loops=-1)
-        self._ufo_siren_kind = kind
-
-    def _choose_ufo_siren(self) -> str | None:
-        if not getattr(self.world, "ufos", None):
-            return None
-
-        ufos = list(self.world.ufos)
-        if not ufos:
-            return None
-
-        has_small = any(getattr(u, "small", False) for u in ufos)
-        return "small" if has_small else "big"
-
-    def _stop_loops(self) -> None:
-        if self._thrust_ch.get_busy():
-            self._thrust_ch.stop()
-        if self._ufo_ch.get_busy():
-            self._ufo_ch.stop()
-        self._ufo_siren_kind = None
 
     def _quit(self) -> None:
         self.running = False

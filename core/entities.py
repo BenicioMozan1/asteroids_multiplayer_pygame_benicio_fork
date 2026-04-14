@@ -1,4 +1,4 @@
-"""Entidades do jogo (sprites)."""
+"""Game entities (sprites)."""
 
 import math
 from random import choice, random, uniform
@@ -21,7 +21,7 @@ def rotate_vec(v: Vec, deg: float) -> Vec:
 
 
 class Bullet(pg.sprite.Sprite):
-    """Tiro genérico."""
+    """Generic projectile."""
 
     def __init__(
         self,
@@ -49,7 +49,7 @@ class Bullet(pg.sprite.Sprite):
 
 
 class Asteroid(pg.sprite.Sprite):
-    """Asteroide com polígono irregular."""
+    """Asteroid with irregular polygon shape."""
 
     def __init__(self, pos: Vec, vel: Vec, size: str) -> None:
         super().__init__()
@@ -61,11 +61,11 @@ class Asteroid(pg.sprite.Sprite):
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
 
     def _make_poly(self) -> list[Vec]:
-        steps = 12 if self.size == "L" else 10 if self.size == "M" else 8
+        steps = C.AST_POLY_STEPS[self.size]
         pts: list[Vec] = []
         for i in range(steps):
             ang = i * (360 / steps)
-            jitter = uniform(0.75, 1.2)
+            jitter = uniform(C.AST_POLY_JITTER_MIN, C.AST_POLY_JITTER_MAX)
             rr = self.r * jitter
             v = Vec(
                 math.cos(math.radians(ang)),
@@ -81,7 +81,7 @@ class Asteroid(pg.sprite.Sprite):
 
 
 class Ship(pg.sprite.Sprite):
-    """Nave controlada por comando (não lê teclado)."""
+    """Ship controlled by command (does not read keyboard)."""
 
     def __init__(self, player_id: PlayerId, pos: Vec) -> None:
         super().__init__()
@@ -129,7 +129,7 @@ class Ship(pg.sprite.Sprite):
             return None
 
         dirv = angle_to_vec(self.angle)
-        pos = self.pos + dirv * (self.r + 6)
+        pos = self.pos + dirv * (self.r + C.BULLET_SPAWN_OFFSET)
         vel = self.vel + dirv * C.SHIP_BULLET_SPEED
 
         self.cool = float(C.SHIP_FIRE_RATE)
@@ -156,19 +156,19 @@ class Ship(pg.sprite.Sprite):
         self.rect.center = (int(self.pos.x), int(self.pos.y))
 
     def ship_points(self) -> tuple[Vec, Vec, Vec]:
-        """Retorna os 3 pontos do triângulo da nave."""
+        """Return the 3 vertices of the ship triangle."""
         dirv = angle_to_vec(self.angle)
-        left = angle_to_vec(self.angle + 140.0)
-        right = angle_to_vec(self.angle - 140.0)
+        left = angle_to_vec(self.angle + C.SHIP_NOSE_ANGLE)
+        right = angle_to_vec(self.angle - C.SHIP_NOSE_ANGLE)
 
         p1 = self.pos + dirv * self.r
-        p2 = self.pos + left * self.r * 0.9
-        p3 = self.pos + right * self.r * 0.9
+        p2 = self.pos + left * self.r * C.SHIP_NOSE_SCALE
+        p3 = self.pos + right * self.r * C.SHIP_NOSE_SCALE
         return p1, p2, p3
 
 
 class UFO(pg.sprite.Sprite):
-    """UFO com dois comportamentos e tiro."""
+    """UFO with two movement behaviors and shooting."""
 
     def __init__(
         self,
