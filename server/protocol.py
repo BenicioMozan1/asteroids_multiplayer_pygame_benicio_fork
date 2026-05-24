@@ -79,6 +79,12 @@ def world_to_snapshot(
     the particles locally — that way bandwidth scales with the number of
     explosions, not with the number of particles per explosion.
 
+    Audio events (``audio_events: [str, ...]``) are tagged strings the
+    client feeds into its `AudioManager` — `"player_shoot"`,
+    `"asteroid_explosion"`, etc. The server already collects them into
+    `world.events` for the same reason particles use events: keeping
+    sound out of the core simulation.
+
     The asteroid polygon (`poly`) is excluded but `poly_seed` is included
     so the client regenerates the exact same shape. Without the seed the
     client would jitter the polygon on every snapshot at the snapshot
@@ -145,6 +151,7 @@ def world_to_snapshot(
             {"kind": kind, "x": pos.x, "y": pos.y}
             for kind, pos in world.particle_events
         ],
+        "audio_events": list(world.events),
         "names": {str(pid): name for pid, name in (names or {}).items()},
         "match_state": world.match_state,
         "time_remaining": world.match_timer.remaining,

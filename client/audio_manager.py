@@ -14,8 +14,20 @@ class AudioManager:
         self._sfx_ch = pg.mixer.Channel(2)
         self._ufo_ch = pg.mixer.Channel(3)
         self._ufo_siren_kind: str | None = None
+        self.muted = False
+
+    def set_muted(self, muted: bool) -> None:
+        """Toggle global mute. When muted, all playback methods are
+        no-ops and any currently-playing channel is silenced immediately.
+        """
+        self.muted = muted
+        if muted:
+            self._sfx_ch.stop()
+            self.stop_all()
 
     def play_events(self, events: list[str]) -> None:
+        if self.muted:
+            return
         for ev in events:
             if ev == "player_shoot":
                 self._sfx_ch.play(self.sounds.player_shoot)
@@ -27,14 +39,19 @@ class AudioManager:
                 self._sfx_ch.play(self.sounds.ship_explosion)
 
     def update_thrust(self, active: bool) -> None:
-        if active:
-            if not self._thrust_ch.get_busy():
-                self._thrust_ch.play(self.sounds.thrust_loop, loops=-1)
-        else:
+        if self.muted or not active:
             if self._thrust_ch.get_busy():
                 self._thrust_ch.stop()
+            return
+        if not self._thrust_ch.get_busy():
+            self._thrust_ch.play(self.sounds.thrust_loop, loops=-1)
 
     def update_ufo_siren(self, ufos: list) -> None:
+        if self.muted:
+            if self._ufo_ch.get_busy():
+                self._ufo_ch.stop()
+            self._ufo_siren_kind = None
+            return
         kind = self._choose_ufo_siren(ufos)
         if kind is None:
             if self._ufo_ch.get_busy():

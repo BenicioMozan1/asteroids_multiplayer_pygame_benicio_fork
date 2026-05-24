@@ -9,7 +9,7 @@ from core import config as C
 from core.collisions import CollisionManager
 from core.commands import PlayerCommand
 from core.entities import UFO, Asteroid, Bullet, Particle, Ship
-from core.utils import Countdown, Vec, rand_edge_pos
+from core.utils import Countdown, Vec, rand_edge_pos, wrap_pos
 
 PlayerId = int
 
@@ -87,7 +87,11 @@ class World:
         )
 
     def spawn_player(self, player_id: PlayerId) -> None:
-        pos = Vec(C.WORLD_WIDTH / 2, C.WORLD_HEIGHT / 2)
+        if self.deathmatch:
+            temp = Ship(player_id, Vec(0, 0))
+            pos = self._find_safe_hyperspace_pos(temp)
+        else:
+            pos = Vec(C.WORLD_WIDTH / 2, C.WORLD_HEIGHT / 2)
         ship = Ship(player_id, pos)
         ship.invuln.reset(C.SAFE_SPAWN_TIME)
 
@@ -143,6 +147,29 @@ class World:
         pos = rand_edge_pos()
         target = self._get_nearest_ship_pos(pos)
         self.ufos.append(UFO(pos, small, target_pos=target))
+
+    def update_local_visual(self, dt: float) -> None:
+        """Smooth non-ship motion between authoritative snapshots.
+
+        The networked client never runs the authoritative `update` —
+        snapshots arrive at SNAPSHOT_HZ and overwrite every entity list.
+        This advances positions purely for rendering, and decays particle
+        ttl locally (particles are not transmitted; the client spawns
+        them from events and must age them out itself, otherwise they
+        accumulate forever).
+        """
+        for a in self.asteroids:
+            a.pos = wrap_pos(a.pos + a.vel * dt)
+        for b in self.bullets:
+            b.pos += b.vel * dt
+        for u in self.ufos:
+            u.pos = wrap_pos(u.pos + u.vel * dt)
+        for p in self.particles:
+            p.pos += p.vel * dt
+            p.ttl -= dt
+            if p.ttl <= 0.0:
+                p.kill()
+        self.particles = [p for p in self.particles if p.alive]
 
     def update(
         self,
@@ -267,19 +294,32 @@ class World:
         self.ships[pid] = ship
 
     def _find_safe_hyperspace_pos(self, ship: Ship) -> Vec:
-        """Pick a random position that is not on top of an asteroid.
+        """Pick a random position not on top of an asteroid or other ship.
+
+        Other ships matter for deathmatch (initial spawn, respawn, and
+        hyperspace would otherwise stack two players on the same pixel).
+        Single-player has only one ship, so the filter is a no-op there.
 
         Tries HYPERSPACE_ATTEMPTS times. Falls back to an unchecked random
-        position if no clear spot is found, which only happens when the screen
-        is saturated with asteroids.
+        position if no clear spot is found, which only happens when the
+        world is saturated.
         """
+        others = [
+            s for s in self.ships.values() if s.player_id != ship.player_id
+        ]
         for _ in range(C.HYPERSPACE_ATTEMPTS):
             pos = Vec(uniform(0, C.WORLD_WIDTH), uniform(0, C.WORLD_HEIGHT))
-            if all(
+            asteroids_clear = all(
                 (pos - ast.pos).length()
                 > (ast.r + ship.r + C.HYPERSPACE_SAFE_MARGIN)
                 for ast in self.asteroids
-            ):
+            )
+            ships_clear = all(
+                (pos - other.pos).length()
+                > (other.r + ship.r + C.HYPERSPACE_SAFE_MARGIN)
+                for other in others
+            )
+            if asteroids_clear and ships_clear:
                 return pos
         return Vec(uniform(0, C.WORLD_WIDTH), uniform(0, C.WORLD_HEIGHT))
 

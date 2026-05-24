@@ -21,7 +21,7 @@ SAFE_SPAWN_TIME = 2.0
 WAVE_DELAY = 2.0
 # Wave count tuned for the 4K world: 32x larger than the original
 # 800x600, so roughly 4x the spawn rate (one asteroid per 1.3 Mpx).
-WAVE_BASE_COUNT = 12
+WAVE_BASE_COUNT = 20
 EXTRA_LIFE_EVERY = 5000
 EXTRA_LIFE_NOTICE_TIME = 1.5
 FRAG_SCORE = 100
@@ -49,6 +49,11 @@ PARTICLE_SHIP = (16, 80.0, 220.0, 1.2)
 SHIP_NOSE_ANGLE = 140.0
 SHIP_NOSE_SCALE = 0.9
 BULLET_SPAWN_OFFSET = 6
+
+# Minimum on-screen radius for a ship triangle. The spectator camera
+# zooms the world to 1/3 size; without this floor each ship would be
+# a 5-pixel speck. Players use scale=1.0 and never hit the clamp.
+MIN_SHIP_VISUAL_R = 12
 
 AST_VEL_MIN = 30.0
 AST_VEL_MAX = 90.0

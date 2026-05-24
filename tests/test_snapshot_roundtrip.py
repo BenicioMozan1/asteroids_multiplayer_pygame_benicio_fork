@@ -18,6 +18,7 @@ EMPTY_SNAPSHOT = {
     "frags": {},
     "respawning": [],
     "events": [],
+    "audio_events": [],
     "names": {},
     "match_state": "running",
     "time_remaining": 0.0,
@@ -264,6 +265,23 @@ def test_snapshot_to_world_applies_winner_id():
     w = World(spawn_default_player=False)
     snapshot_to_world(_snapshot(winner_id=7), w)
     assert w.winner_id == 7
+
+
+def test_snapshot_to_world_populates_world_events_from_audio_events():
+    w = World(spawn_default_player=False)
+    snapshot_to_world(
+        _snapshot(audio_events=["player_shoot", "ship_explosion"]), w
+    )
+    assert w.events == ["player_shoot", "ship_explosion"]
+
+
+def test_snapshot_to_world_overwrites_previous_events():
+    """Each snapshot replaces the audio queue so a missed render frame
+    doesn't replay last-tick sounds."""
+    w = World(spawn_default_player=False)
+    w.events.append("stale")
+    snapshot_to_world(_snapshot(audio_events=["fresh"]), w)
+    assert w.events == ["fresh"]
 
 
 def test_snapshot_to_world_defaults_match_state_for_legacy_payloads():
