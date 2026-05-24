@@ -79,6 +79,29 @@ def test_deathmatch_respawn_after_delay_reinstates_ship():
     assert world.scores[7] == 250, "score preserved across respawn"
 
 
+def test_deathmatch_spawn_does_not_use_fixed_center():
+    """Two players spawning back-to-back must not stack on each other.
+    Single-player keeps the fixed center to preserve its behavior."""
+    random.seed(123)
+    world = World(spawn_default_player=False, deathmatch=True)
+    world.spawn_player(1)
+    world.spawn_player(2)
+
+    center = Vec(C.WORLD_WIDTH / 2, C.WORLD_HEIGHT / 2)
+    pos1 = world.ships[1].pos
+    pos2 = world.ships[2].pos
+
+    assert pos1 != center or pos2 != center
+    margin = world.ships[1].r + world.ships[2].r + C.HYPERSPACE_SAFE_MARGIN
+    assert (pos1 - pos2).length() > margin
+
+
+def test_single_player_spawn_keeps_world_center():
+    world = World()
+    assert world.ships[C.LOCAL_PLAYER_ID].pos.x == C.WORLD_WIDTH / 2
+    assert world.ships[C.LOCAL_PLAYER_ID].pos.y == C.WORLD_HEIGHT / 2
+
+
 def test_deathmatch_respawn_position_avoids_asteroids():
     random.seed(42)
     world = World(spawn_default_player=False, deathmatch=True)

@@ -90,6 +90,7 @@ def test_world_to_snapshot_has_required_keys():
         "frags",
         "respawning",
         "events",
+        "audio_events",
         "names",
         "match_state",
         "time_remaining",
@@ -213,6 +214,18 @@ def test_snapshot_includes_events_for_each_spawn_kind():
         {"kind": "ufo", "x": 30, "y": 40},
         {"kind": "ship", "x": 50, "y": 60},
     ]
+
+
+def test_snapshot_audio_events_empty_by_default():
+    snap = world_to_snapshot(World())
+    assert snap["audio_events"] == []
+
+
+def test_snapshot_audio_events_mirror_world_events():
+    w = World()
+    w.events.extend(["player_shoot", "asteroid_explosion"])
+    snap = world_to_snapshot(w)
+    assert snap["audio_events"] == ["player_shoot", "asteroid_explosion"]
 
 
 def test_event_constant_removed_from_protocol():

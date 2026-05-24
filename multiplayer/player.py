@@ -23,6 +23,8 @@ from typing import Any
 import pygame as pg
 import websockets
 
+from client.audio import load_sounds
+from client.audio_manager import AudioManager
 from client.camera import Camera
 from client.controls import InputMapper
 from client.renderer import Renderer
@@ -73,7 +75,14 @@ class Player:
 
         self.world = World(spawn_default_player=False)
 
+        pg.mixer.pre_init(
+            C.AUDIO_FREQUENCY,
+            C.AUDIO_SIZE,
+            C.AUDIO_CHANNELS,
+            C.AUDIO_BUFFER,
+        )
         pg.init()
+        pg.mixer.init()
         self.screen = pg.display.set_mode((C.WINDOW_WIDTH, C.WINDOW_HEIGHT))
         pg.display.set_caption(f"Asteroids — {name}")
         self.font = pg.font.SysFont(C.FONT_NAME, C.FONT_SIZE_SMALL)
@@ -86,6 +95,9 @@ class Player:
             fonts={"font": self.font, "big": self.big},
         )
         self.input_mapper = InputMapper()
+        self.audio = AudioManager(load_sounds(C.SOUND_PATH))
+        # Audio starts muted; players toggle it with Right Shift.
+        self.audio.set_muted(True)
 
     async def run(self) -> None:
         uri = f"ws://{self.host}:{self.port}"
@@ -151,8 +163,11 @@ class Player:
     async def _game_loop(self, ws: Any) -> None:
         period = 1.0 / C.FPS
         loop = asyncio.get_running_loop()
+        last_frame = loop.time()
         while self.running:
             frame_start = loop.time()
+            dt = min(frame_start - last_frame, 0.1)
+            last_frame = frame_start
 
             for event in pg.event.get():
                 if event.type == pg.QUIT or (
@@ -160,6 +175,8 @@ class Player:
                     and event.key in (pg.K_ESCAPE, pg.K_q)
                 ):
                     self.running = False
+                elif event.type == pg.KEYDOWN and event.key == pg.K_RSHIFT:
+                    self.audio.set_muted(not self.audio.muted)
                 elif (
                     event.type == pg.KEYDOWN
                     and event.key == pg.K_RETURN
@@ -187,6 +204,12 @@ class Player:
             except websockets.ConnectionClosed:
                 self.running = False
                 break
+
+            self.world.update_local_visual(dt)
+            self.audio.update_thrust(cmd.thrust)
+            self.audio.update_ufo_siren(list(self.world.ufos))
+            self.audio.play_events(self.world.events)
+            self.world.events.clear()
 
             self._draw()
 

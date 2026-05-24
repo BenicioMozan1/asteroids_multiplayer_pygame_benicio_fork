@@ -6,7 +6,7 @@ from client.camera import Camera
 from core import config as C
 from core.entities import UFO, Asteroid, Bullet, Particle, Ship
 from core.scene import SceneState
-from core.utils import Vec
+from core.utils import Vec, angle_to_vec
 
 
 def color_for_player(
@@ -134,7 +134,8 @@ class Renderer:
         keeps the original UFO-bullet appearance intact."""
         color = color_for_player(bullet.owner_id, self.config.PLAYER_COLORS)
         center = self.camera.world_to_screen(bullet.pos)
-        pg.draw.circle(self.screen, color, center, bullet.r, width=1)
+        r = max(1, int(bullet.r * self.camera.scale))
+        pg.draw.circle(self.screen, color, center, r, width=1)
 
     def _draw_particle(self, particle: Particle) -> None:
         sx, sy = self.camera.world_to_screen(particle.pos)
@@ -143,24 +144,44 @@ class Renderer:
 
     def _draw_asteroid(self, asteroid: Asteroid) -> None:
         ox, oy = self.camera.world_to_screen(asteroid.pos)
-        points = [(ox + int(p.x), oy + int(p.y)) for p in asteroid.poly]
+        scale = self.camera.scale
+        points = [
+            (ox + int(p.x * scale), oy + int(p.y * scale))
+            for p in asteroid.poly
+        ]
         pg.draw.polygon(self.screen, self.config.WHITE, points, width=1)
 
     def _draw_ship(self, ship: Ship) -> None:
         color = color_for_player(ship.player_id, self.config.PLAYER_COLORS)
-        p1, p2, p3 = ship.ship_points()
+        cx, cy = self.camera.world_to_screen(ship.pos)
+
+        # Ship size on screen, with a floor for zoomed-out spectator
+        # cameras (where ship.r * scale would otherwise round to a
+        # handful of pixels). Player camera has scale=1.0 and never
+        # hits the clamp.
+        visual_r = max(
+            ship.r * self.camera.scale, self.config.MIN_SHIP_VISUAL_R
+        )
+
+        dirv = angle_to_vec(ship.angle)
+        left = angle_to_vec(ship.angle + self.config.SHIP_NOSE_ANGLE)
+        right = angle_to_vec(ship.angle - self.config.SHIP_NOSE_ANGLE)
+        nose_r = visual_r * self.config.SHIP_NOSE_SCALE
         points = [
-            self.camera.world_to_screen(p1),
-            self.camera.world_to_screen(p2),
-            self.camera.world_to_screen(p3),
+            (cx + dirv.x * visual_r, cy + dirv.y * visual_r),
+            (cx + left.x * nose_r, cy + left.y * nose_r),
+            (cx + right.x * nose_r, cy + right.y * nose_r),
         ]
         pg.draw.polygon(self.screen, color, points, width=1)
 
-        center = self.camera.world_to_screen(ship.pos)
         if ship.invuln.active and int(ship.invuln.remaining * 10) % 2 == 0:
-            pg.draw.circle(self.screen, color, center, ship.r + 6, width=1)
+            pg.draw.circle(
+                self.screen, color, (cx, cy), int(visual_r + 6), width=1
+            )
         if ship.shield.active:
-            pg.draw.circle(self.screen, color, center, ship.r + 12, width=2)
+            pg.draw.circle(
+                self.screen, color, (cx, cy), int(visual_r + 12), width=2
+            )
 
     def _draw_ship_name(self, ship: Ship, world: object) -> None:
         """Render the display name centered just below the ship.
@@ -181,8 +202,9 @@ class Renderer:
 
     def _draw_ufo(self, ufo: UFO) -> None:
         cx, cy = self.camera.world_to_screen(ufo.pos)
-        width = ufo.r * 2
-        height = ufo.r
+        scaled_r = max(int(ufo.r * self.camera.scale), 4)
+        width = scaled_r * 2
+        height = scaled_r
 
         body = pg.Rect(0, 0, width, height)
         body.center = (cx, cy)

@@ -14,6 +14,17 @@ from core import config as C
 from core.utils import Vec
 
 
+def test_base_camera_scale_is_one():
+    cam = Camera()
+    assert cam.scale == 1.0
+
+
+def test_spectator_camera_scale_matches_window_fit():
+    cam = SpectatorCamera(1280, 720)
+    assert cam.scale == compute_scale(1280, 720)
+    assert cam.scale < 1.0
+
+
 def test_compute_scale_uses_smaller_axis_ratio():
     """Wider-than-tall window: vertical fit is the bottleneck."""
     assert compute_scale(3840, 1080, 3840, 2160) == pytest.approx(0.5)

@@ -57,6 +57,11 @@ def snapshot_to_world(snap: dict[str, Any], world: World) -> None:
     world.wave = snap["wave"]
     world.game_over = snap["game_over"]
 
+    # Audio events are tagged strings the client's AudioManager consumes
+    # once per snapshot. Overwrite (don't extend) so a missed render
+    # frame doesn't replay sounds at the next one.
+    world.events = list(snap.get("audio_events", []))
+
     # Particles are not transported in the snapshot itself — only the
     # discrete events that spawn them. The client materializes them by
     # calling the same _spawn_particles the server used.

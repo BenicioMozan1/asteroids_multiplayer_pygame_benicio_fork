@@ -17,12 +17,19 @@ from core.utils import Vec
 
 
 class Camera:
-    """Holds the screen-space origin in world coordinates."""
+    """Holds the screen-space origin in world coordinates.
 
-    __slots__ = ("origin",)
+    ``scale`` is a uniform multiplier applied by the renderer to entity
+    radii and polygon offsets. The player camera leaves it at 1.0 (the
+    world viewport is 1:1 with the window); the spectator camera fits
+    the entire world into the window and sets it below 1.0.
+    """
+
+    __slots__ = ("origin", "scale")
 
     def __init__(self) -> None:
         self.origin = Vec(0.0, 0.0)
+        self.scale = 1.0
 
     def update(self, target: Vec) -> None:
         """Re-center on target, clamped to never see past the world."""
