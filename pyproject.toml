@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "asteroids"
+name = "asteroids-multiplayer"
 version = "0.1.0"
-description = "Single-player Asteroids in Python with pygame"
+description = "LAN deathmatch multiplayer Asteroids. Didactic client-server project."
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
