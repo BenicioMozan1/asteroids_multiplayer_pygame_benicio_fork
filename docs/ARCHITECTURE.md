@@ -283,25 +283,34 @@ fixed delay to remote ships.
 
 ## 8. Testing & Tooling
 
-- `tests/` holds 17 pytest modules (256 tests). The headless design pays
+- `tests/` holds 18 pytest modules (261 tests). The headless design pays
   off here: `core/` and the pure `multiplayer/` modules (snapshot,
   command_codec, prediction) are tested without a display or a network,
   and the `*_lines` HUD builders are tested without rendering. CI runs
   `ruff check`, `ruff format --check`, and `pytest` on every push and PR.
 - `scripts/profile_tick.py` profiles `World.update` under cProfile;
   `scripts/server_health.py` probes a running server (sends a HELLO,
-  expects a reply) and exits 0/1.
+  expects a reply) and exits 0/1. For live timing, the server takes
+  `--profile-broadcast` (per-broadcast ms and pre-deflate bytes) and the
+  clients take `--profile-frames` (frame-time p50/p95/max per section,
+  plus snapshot jitter on the networked client), both built on the pure
+  `core/frame_stats.py` helper.
 - Performance work follows the project's "optimize only with
   measurement" rule: profile first, and only optimize a hotspot that
-  measurement shows is worth it.
+  measurement shows is worth it. The F7 pass is the rule in action — the
+  baseline cleared the tick (6% of budget), the bandwidth (already
+  `permessage-deflate`-compressed), and the client frame, so it shipped
+  instrumentation and no optimization.
 
 ## 9. Lineage
 
 This project began as a single-player codebase whose `core/` was coupled
 to pygame (`pygame.sprite.Sprite`, `pygame.math.Vector2`). The
-multiplayer conversion (phases F1–F6) decoupled `core/` from pygame,
+multiplayer conversion (phases F1–F7) decoupled `core/` from pygame,
 extracted the `CollisionManager`, made score/lives/frags per-player,
 added the authoritative server and networked clients, the match
-lifecycle, multi-room support with a token allowlist, and finally the
-prediction/reconciliation/interpolation netcode. The single-player mode
+lifecycle, multi-room support with a token allowlist, the
+prediction/reconciliation/interpolation netcode, and finally the
+client-side frame profiling that confirmed — by measurement — that no
+hotspot warranted optimization. The single-player mode
 (`python main.py`) is preserved across all of it.
