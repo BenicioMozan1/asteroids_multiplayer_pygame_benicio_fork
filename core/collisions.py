@@ -11,6 +11,8 @@ from core.entities import (
     UFO_BULLET_OWNER,
     Asteroid,
     Bullet,
+    GiantBullet,
+    GiantShotPowerup,
     LaserBeam,
     LaserPowerup,
     PlayerId,
@@ -421,6 +423,37 @@ class CollisionManager:
                     break
 
                 
+    def _giant_bullet_vs_ships(
+        self,
+        ships: dict[PlayerId, Ship],
+        giant_bullets: list[GiantBullet],
+        result: CollisionResult,
+    ) -> None:
+        """GiantBullet hits an enemy ship: apply giant debuff, do NOT kill.
+
+        The bullet is destroyed on impact. The victim receives the giant
+        debuff (enlarged hitbox + slowed speed) for GIANT_SHOT_DURATION
+        seconds. The shooter's own ship is always skipped.
+        Invulnerable ships and ships with an active shield are immune.
+        """
+        from core import config as C  # avoid top-level circular dependency
+
+        for gb in giant_bullets:
+            if not gb.alive:
+                continue
+            for ship in ships.values():
+                if ship.player_id == gb.owner_id:
+                    continue
+                if ship.invuln.active or ship.shield.active:
+                    continue
+                if (ship.pos - gb.pos).length() < (ship.current_r + gb.r):
+                    gb.kill()
+                    ship.giant.reset(C.GIANT_SHOT_DURATION)
+                    ship.vel = ship.vel * C.GIANT_SHOT_SPEED_MULT
+                    result.giant_shot_hits.append((gb.owner_id, ship.player_id))
+                    result.events.append("giant_shot_hit")
+                    break
+
     def _split_asteroid(
         self,
         ast: Asteroid,
