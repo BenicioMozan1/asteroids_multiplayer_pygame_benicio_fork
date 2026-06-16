@@ -139,7 +139,6 @@ def world_to_snapshot(
                 "vy": _r(a.vel.y),
                 "size": a.size,
                 "poly_seed": a.poly_seed,
-                "red": a.red,
             }
             for a in world.asteroids
         ],
@@ -174,6 +173,19 @@ def world_to_snapshot(
             }
             for p in world.powerups
         ],
+         "freeze_powerups": [
+            {
+                "x": _r(fp.pos.x),
+                "y": _r(fp.pos.y),
+                "ttl": _r(fp.ttl),
+            }
+            for fp in getattr(world, "freeze_powerups", [])
+        ],  
+        "freeze_remaining": _r(
+            world.freeze_timer.remaining
+            if hasattr(world, "freeze_timer")
+            else 0.0
+        ),
         "laser_events": [
             {
                 "owner_id": oid,
