@@ -8,6 +8,11 @@ from random import Random, choice, random, randrange, uniform
 from core import config as C
 from core.commands import PlayerCommand
 from core.utils import Countdown, Vec, angle_to_vec, wrap_pos
+from core.entities import (
+    UFO, UFO_BULLET_OWNER, Asteroid, Bullet,
+    GiantBullet, GiantShotPowerup,
+    LaserBeam, LaserPowerup, PlayerId, Ship,
+)
 
 PlayerId = int
 
