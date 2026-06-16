@@ -8,11 +8,6 @@ from random import Random, choice, random, randrange, uniform
 from core import config as C
 from core.commands import PlayerCommand
 from core.utils import Countdown, Vec, angle_to_vec, wrap_pos
-from core.entities import (
-    UFO, UFO_BULLET_OWNER, Asteroid, Bullet,
-    GiantBullet, GiantShotPowerup,
-    LaserBeam, LaserPowerup, PlayerId, Ship,
-)
 
 PlayerId = int
 
@@ -349,9 +344,7 @@ class Ship(Entity):
         dirv = angle_to_vec(self.angle)
         spawn = self.pos + dirv * (self.r + C.BULLET_SPAWN_OFFSET)
 
-        # Giant Shot: consome o tiro único especial (tem prioridade sobre laser).
-        # has_giant_shot é setado True quando o jogador coleta o
-        # GiantShotPowerup (resolvido em collisions.py pelo Fernando).
+
         if self.has_giant_shot:
             self.has_giant_shot = False
             vel = self.vel + dirv * C.GIANT_SHOT_BULLET_SPEED
