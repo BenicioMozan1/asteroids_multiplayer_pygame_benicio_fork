@@ -22,6 +22,8 @@ class SoundPack:
     ufo_siren_small: pg.mixer.Sound
     laser_pickup: pg.mixer.Sound
     laser_shoot: pg.mixer.Sound
+    giant_shot_pickup: pg.mixer.Sound
+    giant_shot_fire: pg.mixer.Sound
 
 
 def load_sounds(base_path: str) -> SoundPack:
@@ -38,4 +40,6 @@ def load_sounds(base_path: str) -> SoundPack:
         ufo_siren_small=s(C.UFO_SIREN_SMALL),
         laser_pickup=s(C.LASER_PICKUP),
         laser_shoot=s(C.LASER_SHOOT),
+        giant_shot_pickup=s(C.GIANT_SHOT_PICKUP),
+        giant_shot_fire=s(C.GIANT_SHOT_FIRE),
     )
