@@ -16,6 +16,7 @@ from core.entities import (
     UFO,
     Asteroid,
     Bullet,
+    FreezePowerup,
     GiantBullet,
     GiantShotPowerup,
     LaserBeam,
@@ -63,6 +64,11 @@ def snapshot_to_world(snap: dict[str, Any], world: World) -> None:
         )
         for p in snap.get("giant_shot_powerups", [])
     ]
+    world.freeze_powerups = [
+        FreezePowerup(Vec(fp["x"], fp["y"]), ttl=fp["ttl"])
+        for fp in snap.get("freeze_powerups", [])
+    ]
+    world.freeze_timer.reset(snap.get("freeze_remaining", 0.0))
     for ev in snap.get("laser_events", []):
         world.lasers.append(
             LaserBeam(

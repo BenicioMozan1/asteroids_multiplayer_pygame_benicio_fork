@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from random import uniform
-
+from random import uniform, random as _random
 from core import config as C
 from core.entities import (
     UFO,
     UFO_BULLET_OWNER,
     Asteroid,
     Bullet,
+    FreezePowerup,
     GiantBullet,
     GiantShotPowerup,
     LaserBeam,
     LaserPowerup,
     PlayerId,
+    Shrapnel,
     Ship,
 )
 from core.utils import Vec, rand_unit_vec, toroidal_delta, wrap_pos
@@ -61,6 +62,10 @@ class CollisionResult:
     giant_shot_pickups: list[tuple[PlayerId, Vec]] = field(default_factory=list)
     # (shooter_id, victim_id) for each giant bullet that hit an enemy ship
     giant_shot_hits: list[tuple[PlayerId, PlayerId]] = field(default_factory=list)
+    powerups_to_apply: list[str] = field(default_factory=list)
+    freeze_powerups_to_spawn: list[Vec] = field(default_factory=list)
+    # (position, velocity) pairs for shrapnel fragments from red asteroids.
+    shrapnel_to_spawn: list[tuple[Vec, Vec]] = field(default_factory=list)
 
 
 class CollisionManager:
@@ -76,6 +81,7 @@ class CollisionManager:
         lasers: list[LaserBeam] | None = None,
         giant_shot_powerups: list[GiantShotPowerup] | None = None,
         giant_bullets: list[GiantBullet] | None = None,
+        freeze_powerups: list[FreezePowerup] | None = None,
     ) -> CollisionResult:
         result = CollisionResult()
         if giant_shot_powerups is not None:
@@ -84,6 +90,8 @@ class CollisionManager:
             self._giant_bullet_vs_ships(ships, giant_bullets, result)
         if powerups is not None:
             self._ship_vs_powerups(ships, powerups, result)
+        if freeze_powerups is not None:
+            self._ship_vs_freeze_powerups(ships, freeze_powerups, result)
         if lasers:
             self._laser_vs_asteroids(lasers, asteroids, result)
             self._laser_vs_ufos(lasers, ufos, result)
@@ -178,7 +186,7 @@ class CollisionManager:
 
             player_bullets = [b for b in hit_bullets if b.owner_id > 0]
             scorer = player_bullets[0].owner_id if player_bullets else None
-            self._split_asteroid(ast, scorer_id=scorer, result=result)
+            self._split_asteroid(ast, scorer_id=scorer, result=result, asteroids=asteroids)
 
     def _destroy_ufo(self, ufo: UFO, result: CollisionResult) -> None:
         """Kill a UFO and emit its explosion event + particles.
@@ -341,6 +349,23 @@ class CollisionManager:
                     )
                     break
 
+    def _ship_vs_freeze_powerups(
+        self,
+        ships: dict[PlayerId, Ship],
+        freeze_powerups: list[FreezePowerup],
+        result: CollisionResult,
+    ) -> None:
+        """Ship overlaps freeze powerup: powerup is collected and freeze effect queued."""
+        for powerup in freeze_powerups:
+            if not powerup.alive:
+                continue
+            for ship in ships.values():
+                if (ship.pos - powerup.pos).length() < (powerup.width + ship.r):
+                    powerup.kill()
+                    result.events.append("powerup_acquired")
+                    result.powerups_to_apply.append("freeze")
+                    break
+
     def _laser_vs_asteroids(
         self,
         lasers: list[LaserBeam],
@@ -355,7 +380,7 @@ class CollisionManager:
                 if not ast.alive:
                     continue
                 if _segment_circle_hit(laser.pos, laser.end_pos, ast.pos, ast.r):
-                    self._split_asteroid(ast, scorer_id=laser.owner_id, result=result)
+                    self._split_asteroid(ast, scorer_id=laser.owner_id, result=result, asteroids=asteroids)
 
     def _laser_vs_ufos(
         self,
@@ -402,7 +427,6 @@ class CollisionManager:
                         result.frag_deltas.get(laser.owner_id, 0) + 1
                     )
                     result.ship_deaths.append(ship.player_id)
-
 
     def _ship_vs_giant_shot_powerups(
         self,
@@ -454,15 +478,52 @@ class CollisionManager:
                     result.events.append("giant_shot_hit")
                     break
 
+    def resolve_shrapnel(
+        self,
+        shrapnel: list[Shrapnel],
+        asteroids: list[Asteroid],
+        ships: dict[PlayerId, Ship],
+        result: CollisionResult,
+    ) -> None:
+        """Resolve shrapnel fragments against asteroids and ships.
+
+        Each fragment that hits an asteroid splits it (no score).
+        Each fragment that hits a ship kills the ship (respects shield/invuln).
+        Fragments are consumed on first hit.
+        """
+        for frag in shrapnel:
+            if not frag.alive:
+                continue
+            for ast in asteroids:
+                if not ast.alive:
+                    continue
+                if (ast.pos - frag.pos).length() < ast.r + frag.r:
+                    frag.kill()
+                    self._split_asteroid(ast, result=result, asteroids=asteroids)
+                    break
+            if not frag.alive:
+                continue
+            for ship in ships.values():
+                if ship.invuln.active:
+                    continue
+                if (ship.pos - frag.pos).length() < ship.r + frag.r:
+                    frag.kill()
+                    if not ship.shield.active:
+                        result.ship_deaths.append(ship.player_id)
+                    break
+
     def _split_asteroid(
         self,
         ast: Asteroid,
         result: CollisionResult,
         scorer_id: PlayerId | None = None,
+        asteroids: list[Asteroid] | None = None,
+        ships: dict[PlayerId, Ship] | None = None,
     ) -> None:
         """Split or destroy an asteroid.
 
         scorer_id=None means no score is awarded (e.g. UFO-asteroid collision).
+        asteroids/ships are passed to enable red asteroid area-of-effect logic.
         """
         if scorer_id is not None:
             result.score_deltas[scorer_id] = (
@@ -474,6 +535,40 @@ class CollisionManager:
         pos = Vec(ast.pos)
         ast.kill()
 
+        if ast.red:
+            result.events.append("red_explosion")
+            result.particles_to_spawn.append((pos, "asteroid"))
+            for _ in range(C.SHRAPNEL_COUNT):
+                dirv = rand_unit_vec()
+                speed = uniform(C.SHRAPNEL_SPEED_MIN, C.SHRAPNEL_SPEED_MAX)
+                result.shrapnel_to_spawn.append((pos, dirv * speed))
+            if ships is not None:
+                for ship in ships.values():
+                    if ship.invuln.active:
+                        continue
+                    if (ship.pos - pos).length() < C.RED_EXPLOSION_RADIUS:
+                        if ship.shield.active:
+                            continue
+                        result.ship_deaths.append(ship.player_id)
+            if asteroids is not None:
+                for other in list(asteroids):
+                    if not other.alive or other is ast:
+                        continue
+                    if (other.pos - pos).length() < C.RED_EXPLOSION_RADIUS:
+                        if scorer_id is not None:
+                            result.score_deltas[scorer_id] = (
+                                result.score_deltas.get(scorer_id, 0)
+                                + C.AST_SIZES[other.size]["score"]
+                            )
+                        self._split_asteroid(
+                            other,
+                            result=result,
+                            scorer_id=scorer_id,
+                            asteroids=asteroids,
+                            ships=ships,
+                        )
+            return
+
         result.events.append("asteroid_explosion")
         result.particles_to_spawn.append((pos, "asteroid"))
 
@@ -483,3 +578,6 @@ class CollisionManager:
                 uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * C.AST_SPLIT_SPEED_MULT
             )
             result.asteroids_to_spawn.append((pos, dirv * speed, new_size))
+
+        if _random() < C.FREEZE_POWERUP_DROP_CHANCE_ASTEROID:
+            result.freeze_powerups_to_spawn.append(pos)

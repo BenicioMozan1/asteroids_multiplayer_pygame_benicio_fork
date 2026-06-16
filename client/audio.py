@@ -24,6 +24,7 @@ class SoundPack:
     laser_shoot: pg.mixer.Sound
     giant_shot_pickup: pg.mixer.Sound
     giant_shot_fire: pg.mixer.Sound
+    red_explosion: pg.mixer.Sound
 
 
 def load_sounds(base_path: str) -> SoundPack:
@@ -42,4 +43,5 @@ def load_sounds(base_path: str) -> SoundPack:
         laser_shoot=s(C.LASER_SHOOT),
         giant_shot_pickup=s(C.GIANT_SHOT_PICKUP),
         giant_shot_fire=s(C.GIANT_SHOT_FIRE),
+        red_explosion=s(C.RED_EXPLOSION),
     )

@@ -153,6 +153,12 @@ GIANT_SHOT_BULLET_SPEED = 350.0         # velocidade (px/s) do projétil especia
 GIANT_SHOT_BULLET_TTL = 1.5             # tempo de vida (s) do projétil especial
 GIANT_SHOT_BULLET_RADIUS = 5            # raio de colisão do projétil especial
 
+# Freeze powerup
+FREEZE_POWERUP_TTL = 20.0
+FREEZE_DURATION = 3.0
+FREEZE_POWERUP_DROP_CHANCE_ASTEROID = 0.07
+CYAN = (0, 255, 255)
+
 # Paths (work from any execution directory).
 # config.py lives in core/, so we go one level up to the project root.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -170,3 +176,15 @@ LASER_PICKUP = "laser_pickup.wav"
 LASER_SHOOT = "laser_shoot.wav"
 GIANT_SHOT_PICKUP = "giant_shot_pickup.wav"
 GIANT_SHOT_FIRE = "giant_shot_fire.wav"
+RED_EXPLOSION = "bomb_explosion.wav"
+
+# Red Meteor
+RED_ASTEROID_CHANCE = 0.15
+RED_ASTEROID_COLOR = (220, 40, 40)
+RED_EXPLOSION_RADIUS = 150
+# Red asteroid shrapnel debris
+SHRAPNEL_COUNT = 18
+SHRAPNEL_SPEED_MIN = 200.0
+SHRAPNEL_SPEED_MAX = 480.0
+SHRAPNEL_TTL = 0.7
+SHRAPNEL_RADIUS = 4

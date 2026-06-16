@@ -65,6 +65,25 @@ class Particle(Entity):
             self.kill()
 
 
+class Shrapnel(Entity):
+    """Short-lived fragment ejected by a red asteroid explosion."""
+
+    __slots__ = ("pos", "vel", "ttl", "r")
+
+    def __init__(self, pos: Vec, vel: Vec) -> None:
+        super().__init__()
+        self.pos = Vec(pos)
+        self.vel = Vec(vel)
+        self.ttl = float(C.SHRAPNEL_TTL)
+        self.r = int(C.SHRAPNEL_RADIUS)
+
+    def update(self, dt: float) -> None:
+        self.pos += self.vel * dt
+        self.ttl -= dt
+        if self.ttl <= 0.0:
+            self.kill()
+
+
 class Bullet(Entity):
     """Generic projectile.
 
@@ -110,7 +129,6 @@ def _laser_end_pos(start: Vec, dirv: Vec) -> Vec:
     if t == float("inf") or t <= 0:
         t = float(max(C.WORLD_WIDTH, C.WORLD_HEIGHT))
     return start + dirv * t
-
 
 class LaserBeam(Entity):
     """Instantaneous laser beam fired from a ship with the laser powerup.
@@ -166,6 +184,35 @@ class LaserPowerup(Entity):
         if self.ttl <= 0.0:
             self.kill()
 
+class FreezePowerup(Entity):
+
+    __slots__ = ("pos", "ttl", "width", "idle_time", "state")
+
+    def __init__(self, pos: Vec, ttl: float = C.FREEZE_POWERUP_TTL) -> None:
+        super().__init__()
+        self.pos = Vec(pos)
+        self.ttl = float(ttl)
+        self.width = 20 
+        self.idle_time = 0.0
+        self.state = "down"
+
+    def update(self, dt: float) -> None:
+        """Animate (gentle bob) and handle TTL."""
+        self.ttl -= dt
+        if self.ttl <= 0.0:
+            self.kill()
+            return
+
+        if self.idle_time > 0.0:
+            self.idle_time -= dt
+        else:
+            if self.state == "down":
+                self.pos.y -= 5
+                self.state = "up"
+            else:
+                self.pos.y += 5
+                self.state = "down"
+            self.idle_time = 1.0
 
 class GiantShotPowerup(Entity):
     """Collectible powerup that grants the ship one Giant Shot bullet.
@@ -242,7 +289,7 @@ class Asteroid(Entity):
     and tests.
     """
 
-    __slots__ = ("pos", "vel", "size", "r", "poly_seed", "poly")
+    __slots__ = ("pos", "vel", "size", "r", "poly_seed", "poly", "red")
 
     def __init__(
         self,
@@ -250,6 +297,7 @@ class Asteroid(Entity):
         vel: Vec,
         size: str,
         poly_seed: int | None = None,
+        red: bool = False,
     ) -> None:
         super().__init__()
         self.pos = Vec(pos)
@@ -259,6 +307,7 @@ class Asteroid(Entity):
         self.poly_seed = (
             poly_seed if poly_seed is not None else randrange(2**31)
         )
+        self.red = red
         self.poly = self._make_poly()
 
     def _make_poly(self) -> list[Vec]:
