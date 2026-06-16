@@ -99,6 +99,8 @@ def test_world_to_snapshot_has_required_keys():
         "events",
         "powerups",
         "giant_shot_powerups",
+        "freeze_powerups",
+        "freeze_remaining",
         "laser_events",
         "audio_events",
         "names",
