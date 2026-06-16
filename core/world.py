@@ -8,7 +8,17 @@ from random import uniform
 from core import config as C
 from core.collisions import CollisionManager
 from core.commands import PlayerCommand
-from core.entities import UFO, Asteroid, Bullet, LaserBeam, LaserPowerup, Particle, Ship
+from core.entities import (
+    UFO,
+    Asteroid,
+    Bullet,
+    GiantBullet,
+    GiantShotPowerup,
+    LaserBeam,
+    LaserPowerup,
+    Particle,
+    Ship,
+)
 from core.utils import Countdown, Vec, rand_edge_pos, wrap_pos
 
 PlayerId = int
@@ -41,6 +51,8 @@ class World:
         self.particles: list[Particle] = []
         self.powerups: list[LaserPowerup] = []
         self.lasers: list[LaserBeam] = []
+        self.giant_shot_powerups: list[GiantShotPowerup] = []
+        self.giant_bullets: list[GiantBullet] = []
 
         self.scores: dict[PlayerId, int] = {}
         self.lives: dict[PlayerId, int] = {}
@@ -70,6 +82,7 @@ class World:
         # Sent in the snapshot so the networked client can render the beam.
         self.laser_events: list[tuple[int, Vec, Vec]] = []
         self.powerup_timer = Countdown(C.LASER_POWERUP_SPAWN_EVERY)
+        self.giant_shot_timer = Countdown(C.GIANT_SHOT_POWERUP_SPAWN_EVERY)
         self._collision_mgr = CollisionManager()
 
         self.game_over = False
@@ -190,6 +203,12 @@ class World:
         self.particles = [p for p in self.particles if p.alive]
         for powerup in self.powerups:
             powerup.pos = wrap_pos(powerup.pos + powerup.vel * dt)
+        for giant_powerup in self.giant_shot_powerups:
+            giant_powerup.pos = wrap_pos(
+                giant_powerup.pos + giant_powerup.vel * dt
+            )
+        for giant_bullet in self.giant_bullets:
+            giant_bullet.pos += giant_bullet.vel * dt
         for laser in self.lasers:
             laser.ttl -= dt
             if laser.ttl <= 0.0:
@@ -227,6 +246,10 @@ class World:
             powerup.update(dt)
         for laser in self.lasers:
             laser.update(dt)
+        for giant_powerup in self.giant_shot_powerups:
+            giant_powerup.update(dt)
+        for giant_bullet in self.giant_bullets:
+            giant_bullet.update(dt)
 
         self._update_ufos(dt)
         self._update_timers(dt)
@@ -262,6 +285,9 @@ class World:
                     (shot.owner_id, Vec(shot.pos), Vec(shot.end_pos))
                 )
                 self.events.append("laser_shoot")
+            elif isinstance(shot, GiantBullet):
+                self.giant_bullets.append(shot)
+                self.events.append("giant_shot_fire")
             elif shot is not None:
                 self.bullets.append(shot)
                 self.events.append("player_shoot")
@@ -365,6 +391,9 @@ class World:
         if self.powerup_timer.tick(dt):
             self._spawn_laser_powerup()
             self.powerup_timer.reset(C.LASER_POWERUP_SPAWN_EVERY)
+        if self.giant_shot_timer.tick(dt):
+            self._spawn_giant_shot_powerup()
+            self.giant_shot_timer.reset(C.GIANT_SHOT_POWERUP_SPAWN_EVERY)
         self.extra_life_notice.tick(dt)
 
     def _spawn_laser_powerup(self) -> None:
@@ -383,6 +412,22 @@ class World:
 
         self.powerups.append(LaserPowerup(pos, Vec(0, 0)))
 
+    def _spawn_giant_shot_powerup(self) -> None:
+        """Spawn a giant-shot powerup near an active ship."""
+        alive_ships = list(self.ships.values())
+
+        if alive_ships:
+            ship = alive_ships[int(uniform(0, len(alive_ships)))]
+            offset = Vec(
+                uniform(-C.WINDOW_WIDTH / 3, C.WINDOW_WIDTH / 3),
+                uniform(-C.WINDOW_HEIGHT / 3, C.WINDOW_HEIGHT / 3),
+            )
+            pos = wrap_pos(ship.pos + offset)
+        else:
+            pos = Vec(uniform(0, C.WORLD_WIDTH), uniform(0, C.WORLD_HEIGHT))
+
+        self.giant_shot_powerups.append(GiantShotPowerup(pos, Vec(0, 0)))
+
     def _maybe_start_next_wave(self, dt: float) -> None:
         if self.asteroids:
             return
@@ -399,6 +444,8 @@ class World:
             self.ufos,
             self.powerups,
             self.lasers,
+            giant_shot_powerups=self.giant_shot_powerups,
+            giant_bullets=self.giant_bullets,
         )
 
         self.events.extend(result.events)
@@ -423,6 +470,12 @@ class World:
             if ship is not None:
                 ship.laser.reset(C.LASER_DURATION)
                 self.events.append("laser_pickup")
+
+        for player_id, _ in result.giant_shot_pickups:
+            ship = self.get_ship(player_id)
+            if ship is not None:
+                ship.has_giant_shot = True
+                self.events.append("giant_shot_pickup")
 
         for player_id in result.ship_deaths:
             ship = self.get_ship(player_id)
@@ -460,6 +513,8 @@ class World:
         ship.angle = -90.0
         ship.invuln.reset(C.SAFE_SPAWN_TIME)
         ship.laser.reset(0.0)
+        ship.giant.reset(0.0)
+        ship.has_giant_shot = False
 
         if all(v <= 0 for v in self.lives.values()):
             self.game_over = True
@@ -491,3 +546,7 @@ class World:
         self.particles = [p for p in self.particles if p.alive]
         self.powerups = [p for p in self.powerups if p.alive]
         self.lasers = [l for l in self.lasers if l.alive]
+        self.giant_shot_powerups = [
+            p for p in self.giant_shot_powerups if p.alive
+        ]
+        self.giant_bullets = [b for b in self.giant_bullets if b.alive]
