@@ -6,7 +6,7 @@ import pygame as pg
 
 from client.camera import Camera
 from core import config as C
-from core.entities import UFO, Asteroid, Bullet, FreezePowerup, LaserBeam, LaserPowerup, Particle, Ship
+from core.entities import UFO, Asteroid, Bullet, FreezePowerup, LaserBeam, LaserPowerup, Particle, Ship, Shrapnel
 from core.scene import SceneState
 from core.utils import Vec, angle_to_vec
 
@@ -66,6 +66,8 @@ class Renderer:
             self._draw_freeze_powerup(fp)
         for laser in getattr(world, "lasers", []):
             self._draw_laser_beam(laser)
+        for frag in getattr(world, "shrapnel", []):
+            self._draw_shrapnel(frag)
         for ship in world.ships.values():
             self._draw_ship(ship)
             self._draw_ship_name(ship, world)
@@ -154,6 +156,11 @@ class Renderer:
         rect = pg.Rect(sx, sy, 2, 2)
         self.screen.fill(self.config.WHITE, rect)
 
+    def _draw_shrapnel(self, frag: Shrapnel) -> None:
+        sx, sy = self.camera.world_to_screen(frag.pos)
+        r = max(1, int(frag.r * self.camera.scale))
+        pg.draw.circle(self.screen, self.config.RED_ASTEROID_COLOR, (sx, sy), r)
+
     def _draw_asteroid(self, asteroid: Asteroid, frozen: bool = False) -> None:
         ox, oy = self.camera.world_to_screen(asteroid.pos)
         scale = self.camera.scale
@@ -161,7 +168,12 @@ class Renderer:
             (ox + int(p.x * scale), oy + int(p.y * scale))
             for p in asteroid.poly
         ]
-        color = self.config.CYAN if frozen else self.config.WHITE
+        if frozen:
+            color = self.config.CYAN
+        elif asteroid.red:
+            color = self.config.RED_ASTEROID_COLOR
+        else:
+            color = self.config.WHITE
         pg.draw.polygon(self.screen, color, points, width=1)
 
     def _draw_ship(self, ship: Ship) -> None:

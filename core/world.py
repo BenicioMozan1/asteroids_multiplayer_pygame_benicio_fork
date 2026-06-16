@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import math
-from random import uniform
+from random import uniform, random as _random
 
 from core import config as C
-from core.collisions import CollisionManager
+from core.collisions import CollisionManager, CollisionResult
 from core.commands import PlayerCommand
-from core.entities import UFO, Asteroid, Bullet, FreezePowerup, LaserBeam, LaserPowerup, Particle, Ship
+from core.entities import UFO, Asteroid, Bullet, FreezePowerup, LaserBeam, LaserPowerup, Particle, Ship, Shrapnel
 from core.utils import Countdown, Vec, rand_edge_pos, wrap_pos
 
 PlayerId = int
@@ -42,6 +42,7 @@ class World:
         self.powerups: list[LaserPowerup] = []
         self.freeze_powerups: list[FreezePowerup] = []
         self.lasers: list[LaserBeam] = []
+        self.shrapnel: list[Shrapnel] = []
 
         self.scores: dict[PlayerId, int] = {}
         self.lives: dict[PlayerId, int] = {}
@@ -146,10 +147,11 @@ class World:
             ang = uniform(0, math.tau)
             speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX)
             vel = Vec(math.cos(ang), math.sin(ang)) * speed
-            self.spawn_asteroid(pos, vel, "L")
+            red = _random() < C.RED_ASTEROID_CHANCE
+            self.spawn_asteroid(pos, vel, "L", red=red)
 
-    def spawn_asteroid(self, pos: Vec, vel: Vec, size: str) -> None:
-        self.asteroids.append(Asteroid(pos, vel, size))
+    def spawn_asteroid(self, pos: Vec, vel: Vec, size: str, red: bool = False) -> None:
+        self.asteroids.append(Asteroid(pos, vel, size, red=red))
 
     def spawn_ufo(self) -> None:
         small = uniform(0, 1) < 0.5
@@ -239,6 +241,8 @@ class World:
             fp.update(dt)
         for laser in self.lasers:
             laser.update(dt)
+        for frag in self.shrapnel:
+            frag.update(dt)
 
         if not frozen:
             self._update_ufos(dt)
@@ -458,6 +462,25 @@ class World:
             if p_type == "freeze":
                 self.freeze_timer.reset(C.FREEZE_DURATION)
 
+        for pos, vel in result.shrapnel_to_spawn:
+            self.shrapnel.append(Shrapnel(pos, vel))
+
+        if self.shrapnel:
+            shrapnel_result = CollisionResult()
+            self._collision_mgr.resolve_shrapnel(
+                self.shrapnel, self.asteroids, self.ships, shrapnel_result
+            )
+            self.events.extend(shrapnel_result.events)
+            for pos, vel, size in shrapnel_result.asteroids_to_spawn:
+                self.spawn_asteroid(pos, vel, size)
+            for pos, kind in shrapnel_result.particles_to_spawn:
+                self._spawn_particles(pos, kind)
+            for player_id in shrapnel_result.ship_deaths:
+                ship = self.get_ship(player_id)
+                if ship is not None:
+                    self._spawn_particles(Vec(ship.pos), "ship")
+                    self._ship_die(ship)
+
         for player_id in result.ship_deaths:
             ship = self.get_ship(player_id)
             if ship is not None:
@@ -526,4 +549,5 @@ class World:
         self.powerups = [p for p in self.powerups if p.alive]
         self.freeze_powerups = [fp for fp in self.freeze_powerups if fp.alive]
         self.lasers = [l for l in self.lasers if l.alive]
-        
+        self.shrapnel = [f for f in self.shrapnel if f.alive]
+

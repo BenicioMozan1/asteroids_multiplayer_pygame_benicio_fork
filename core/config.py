@@ -163,3 +163,15 @@ UFO_SIREN_BIG = "ufo_siren_big.wav"
 UFO_SIREN_SMALL = "ufo_siren_small.wav"
 LASER_PICKUP = "laser_pickup.wav"
 LASER_SHOOT = "laser_shoot.wav"
+RED_EXPLOSION = "bomb_explosion.wav"
+
+# Red Meteor
+RED_ASTEROID_CHANCE = 0.15
+RED_ASTEROID_COLOR = (220, 40, 40)
+RED_EXPLOSION_RADIUS = 150
+# Red asteroid shrapnel debris
+SHRAPNEL_COUNT = 18
+SHRAPNEL_SPEED_MIN = 200.0
+SHRAPNEL_SPEED_MAX = 480.0
+SHRAPNEL_TTL = 0.7
+SHRAPNEL_RADIUS = 4

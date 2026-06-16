@@ -65,6 +65,25 @@ class Particle(Entity):
             self.kill()
 
 
+class Shrapnel(Entity):
+    """Short-lived fragment ejected by a red asteroid explosion."""
+
+    __slots__ = ("pos", "vel", "ttl", "r")
+
+    def __init__(self, pos: Vec, vel: Vec) -> None:
+        super().__init__()
+        self.pos = Vec(pos)
+        self.vel = Vec(vel)
+        self.ttl = float(C.SHRAPNEL_TTL)
+        self.r = int(C.SHRAPNEL_RADIUS)
+
+    def update(self, dt: float) -> None:
+        self.pos += self.vel * dt
+        self.ttl -= dt
+        if self.ttl <= 0.0:
+            self.kill()
+
+
 class Bullet(Entity):
     """Generic projectile.
 
@@ -205,7 +224,7 @@ class Asteroid(Entity):
     and tests.
     """
 
-    __slots__ = ("pos", "vel", "size", "r", "poly_seed", "poly")
+    __slots__ = ("pos", "vel", "size", "r", "poly_seed", "poly", "red")
 
     def __init__(
         self,
@@ -213,6 +232,7 @@ class Asteroid(Entity):
         vel: Vec,
         size: str,
         poly_seed: int | None = None,
+        red: bool = False,
     ) -> None:
         super().__init__()
         self.pos = Vec(pos)
@@ -222,6 +242,7 @@ class Asteroid(Entity):
         self.poly_seed = (
             poly_seed if poly_seed is not None else randrange(2**31)
         )
+        self.red = red
         self.poly = self._make_poly()
 
     def _make_poly(self) -> list[Vec]:
